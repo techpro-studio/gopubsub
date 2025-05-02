@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+type PanicNotifier func(any)
+
 type Subscriber struct {
 	url          string
 	queue        string
@@ -17,10 +19,11 @@ type Subscriber struct {
 	exchange     string
 	needAck      bool
 	listenerName string
+	panicNotify  PanicNotifier
 }
 
-func NewSubscriber(url string, name string, listenerName string, needAck bool, exchange string, routingKey string) *Subscriber {
-	return &Subscriber{url: url, queue: name, listenerName: listenerName, needAck: needAck, exchange: exchange, routingKey: routingKey}
+func NewSubscriber(url string, name string, listenerName string, needAck bool, exchange string, routingKey string, panicNotify PanicNotifier) *Subscriber {
+	return &Subscriber{url: url, queue: name, listenerName: listenerName, needAck: needAck, exchange: exchange, routingKey: routingKey, panicNotify: panicNotify}
 }
 
 func (s *Subscriber) Listen(ctx context.Context, handler pubsub.SubscriptionHandler) {
@@ -90,40 +93,7 @@ func (s *Subscriber) Listen(ctx context.Context, handler pubsub.SubscriptionHand
 				if ctx.Err() != nil {
 					return
 				}
-				var evt any
-				if err := json.Unmarshal(d.Body, &evt); err != nil {
-					s.logError(err.Error(), "json parse")
-					if s.needAck {
-						err := d.Nack(false, false)
-						if err != nil {
-							s.logError(err.Error(), "nack error json")
-						} // send to DLQ
-					}
-					continue
-				}
-
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							s.logError(fmt.Sprint(r), "panic in handler")
-						}
-					}()
-					if err := handler.Handle(ctx, evt); err != nil {
-						s.logError(err.Error(), "handler")
-						if s.needAck {
-							err := d.Nack(false, true)
-							if err != nil {
-								s.logError(err.Error(), "nack")
-							} // retry
-						}
-						return
-					}
-					if s.needAck {
-						if err := d.Ack(false); err != nil {
-							s.logError(err.Error(), "ack")
-						}
-					}
-				}()
+				s.process(ctx, d, handler)
 			}
 		}()
 
@@ -141,6 +111,39 @@ func (s *Subscriber) Listen(ctx context.Context, handler pubsub.SubscriptionHand
 
 		_ = ch.Close()
 		_ = conn.Close()
+	}
+}
+
+func (s *Subscriber) process(ctx context.Context, d amqp.Delivery, handler pubsub.SubscriptionHandler) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.logError(fmt.Sprint(r), "panic")
+			if s.needAck {
+				_ = d.Nack(false, false)
+			}
+			s.panicNotify(r)
+		}
+	}()
+
+	var evt any // use a concrete type if you can
+	if err := json.Unmarshal(d.Body, &evt); err != nil {
+		s.logError(err.Error(), "json")
+		if s.needAck {
+			_ = d.Nack(false, false)
+		}
+		return
+	}
+
+	if err := handler.Handle(ctx, evt); err != nil {
+		s.logError(err.Error(), "handler")
+		if s.needAck {
+			_ = d.Nack(false, true)
+		}
+		return
+	}
+
+	if s.needAck {
+		_ = d.Ack(false)
 	}
 }
 
