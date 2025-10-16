@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
-	pubsub "github.com/techpro-studio/gopubsub"
+	"github.com/techpro-studio/gopubsub/abstract"
 	"log"
 	"time"
 )
@@ -22,11 +22,17 @@ type Subscriber struct {
 	panicNotify  PanicNotifier
 }
 
-func NewSubscriber(url string, name string, listenerName string, needAck bool, exchange string, routingKey string, panicNotify PanicNotifier) *Subscriber {
-	return &Subscriber{url: url, queue: name, listenerName: listenerName, needAck: needAck, exchange: exchange, routingKey: routingKey, panicNotify: panicNotify}
+func NewSubscriber(url string, name string, listenerName string, needAck bool, exchange string, routingKey string) *Subscriber {
+	return &Subscriber{url: url, queue: name, listenerName: listenerName, needAck: needAck, exchange: exchange, routingKey: routingKey, panicNotify: func(panicData any) {
+		log.Printf("Panic happened inside %s: %v", listenerName, panicData)
+	}}
 }
 
-func (s *Subscriber) Listen(ctx context.Context, handler pubsub.SubscriptionHandler) {
+func (s *Subscriber) SetPanicNotify(panicNotify PanicNotifier) {
+	s.panicNotify = panicNotify
+}
+
+func (s *Subscriber) Listen(ctx context.Context, handler abstract.SubscriptionHandler) {
 	backoff := time.Second
 
 	for {
@@ -114,7 +120,7 @@ func (s *Subscriber) Listen(ctx context.Context, handler pubsub.SubscriptionHand
 	}
 }
 
-func (s *Subscriber) process(ctx context.Context, d amqp.Delivery, handler pubsub.SubscriptionHandler) {
+func (s *Subscriber) process(ctx context.Context, d amqp.Delivery, handler abstract.SubscriptionHandler) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.logError(fmt.Sprint(r), "panic")
@@ -148,6 +154,6 @@ func (s *Subscriber) process(ctx context.Context, d amqp.Delivery, handler pubsu
 }
 
 func (s *Subscriber) logError(err string, place string) {
-	log.Printf("Error has been occured in place : %s , in pubsub:  %s, with listener: %s, error: %s",
+	log.Printf("Error has been occured in place : %s , in abstract:  %s, with listener: %s, error: %s",
 		place, s.queue, s.listenerName, err)
 }

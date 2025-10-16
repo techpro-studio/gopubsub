@@ -1,19 +1,6 @@
-package pubsub
+package abstract
 
-import (
-	"context"
-	"time"
-)
-
-type Publisher interface {
-	Publish(
-		ctx context.Context,
-		routingKey string,
-		payload any,
-		retry int,
-		delay time.Duration,
-	) error
-}
+import "context"
 
 type SubscriptionHandler interface {
 	Handle(ctx context.Context, body any) error
