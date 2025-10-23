@@ -2,7 +2,6 @@ package google
 
 import (
 	"context"
-	"encoding/base64"
 	"github.com/go-jose/go-jose/v4/json"
 	"github.com/techpro-studio/gohttplib"
 	"github.com/techpro-studio/gopubsub/abstract"
@@ -33,24 +32,21 @@ func (h *HttpProxySubscriber) Listen(ctx context.Context, handler abstract.Subsc
 		body, err := io.ReadAll(r.Body)
 		defer r.Body.Close()
 		if err != nil {
+			log.Printf("Error reading body: %v", err)
 			gohttplib.HTTP400("Failed to read request body").Write(w)
 			return
 		}
 		// byte slice unmarshalling handles base64 decoding.
 		if err := json.Unmarshal(body, &m); err != nil {
+			log.Printf("Error unmarshalling body: %v", err)
 			gohttplib.HTTP400("Failed to unmarshal message").Write(w)
 			return
 		}
 
 		var payload any
-		var jsonBytes []byte
-		_, err = base64.StdEncoding.Decode(jsonBytes, m.Message.Data)
-		if err != nil {
-			gohttplib.HTTP400("Failed to decode b64").Write(w)
-			return
-		}
 		err = json.Unmarshal(m.Message.Data, &payload)
 		if err != nil {
+			log.Printf("Failed to unmarshal payload: %v", err)
 			gohttplib.HTTP400("Failed to unmarshal payload").Write(w)
 			return
 		}
