@@ -31,6 +31,9 @@ func NewSubscriber(url string, name string, listenerName string, needAck bool, e
 func (s *Subscriber) SetPanicNotify(panicNotify PanicNotifier) {
 	s.panicNotify = panicNotify
 }
+func (s *Subscriber) Close() error {
+	return nil
+}
 
 func (s *Subscriber) Listen(ctx context.Context, handler abstract.SubscriptionHandler) {
 	backoff := time.Second

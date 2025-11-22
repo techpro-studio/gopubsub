@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"context"
 	"fmt"
 	"github.com/techpro-studio/gopubsub/abstract"
 	"github.com/techpro-studio/gopubsub/amqp"
@@ -95,8 +96,7 @@ func GetCredentialsFromEnv(envPrefix string) (Credentials, error) {
 	return nil, fmt.Errorf("%s environment variable is not correct, it should be either amqp or google", KEnvPubSubType)
 }
 
-func NewPublisherFromCredentials(credentials Credentials) (abstract.Publisher, error) {
-
+func NewPublisherFromCredentials(ctx context.Context, credentials Credentials) (abstract.Publisher, error) {
 	if credentials.GetPubSubType() == TypeGoogle {
 		casted := credentials.(GoogleCredentials)
 		if casted.ProjectId == "" {
@@ -105,7 +105,7 @@ func NewPublisherFromCredentials(credentials Credentials) (abstract.Publisher, e
 		if casted.AccountKeyB64 == "" {
 			return nil, fmt.Errorf("%s environment variable not set", KEnvGooglePubSubAccountKeyB64)
 		}
-		return google.NewPublisher(casted.AccountKeyB64, casted.ProjectId), nil
+		return google.NewPublisher(ctx, casted.AccountKeyB64, casted.ProjectId)
 	} else {
 		casted := credentials.(AmqpCredentials)
 		if casted.AmqpUrl == "" {
@@ -118,7 +118,7 @@ func NewPublisherFromCredentials(credentials Credentials) (abstract.Publisher, e
 	}
 }
 
-func NewSubscriberFromCredentials(credentials Credentials) (abstract.Subscriber, error) {
+func NewSubscriberFromCredentials(ctx context.Context, credentials Credentials) (abstract.Subscriber, error) {
 	if credentials.GetPubSubType() == TypeGoogle {
 		casted, ok := credentials.(GoogleCredentials)
 		if !ok {
@@ -140,7 +140,7 @@ func NewSubscriberFromCredentials(credentials Credentials) (abstract.Subscriber,
 		if casted.SubscriberTopic == "" {
 			return nil, fmt.Errorf("%s environment variable not set", KEnvGooglePubSubTopic)
 		}
-		return google.NewDefaultSubscriber(casted.AccountKeyB64, casted.ProjectId, casted.SubscriberTopic), nil
+		return google.NewDefaultSubscriber(ctx, casted.AccountKeyB64, casted.ProjectId, casted.SubscriberTopic)
 	} else {
 		casted, ok := credentials.(AmqpCredentials)
 		if !ok {

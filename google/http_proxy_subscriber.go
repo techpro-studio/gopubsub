@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"errors"
 	"github.com/go-jose/go-jose/v4/json"
 	"github.com/techpro-studio/gohttplib"
 	"github.com/techpro-studio/gopubsub/abstract"
@@ -11,7 +12,8 @@ import (
 )
 
 type HttpProxySubscriber struct {
-	port string
+	port   string
+	server *http.Server
 }
 
 func NewHttpProxySubscriber(port string) *HttpProxySubscriber {
@@ -26,8 +28,14 @@ type WrappedMessage struct {
 	Subscription string `json:"subscription"`
 }
 
+func (h *HttpProxySubscriber) Close() error {
+	return h.server.Shutdown(context.Background())
+}
+
 func (h *HttpProxySubscriber) Listen(ctx context.Context, handler abstract.SubscriptionHandler) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var m WrappedMessage
 		body, err := io.ReadAll(r.Body)
 		defer r.Body.Close()
@@ -54,11 +62,14 @@ func (h *HttpProxySubscriber) Listen(ctx context.Context, handler abstract.Subsc
 		err = handler.Handle(ctx, payload)
 		gohttplib.WriteJsonOrError(w, map[string]int{"ok": 1}, 200, err)
 	})
-	// Determine port for HTTP service.
-
-	// Start HTTP server.
+	h.server = &http.Server{
+		Addr:    ":" + h.port,
+		Handler: mux,
+	}
 	log.Printf("Listening on port %s", h.port)
-	if err := http.ListenAndServe(":"+h.port, nil); err != nil {
-		log.Fatal(err)
+
+	// Start server (blocking)
+	if err := h.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("HTTP server failed: %v", err)
 	}
 }

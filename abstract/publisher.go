@@ -13,4 +13,5 @@ type Publisher interface {
 		retry int,
 		delay time.Duration,
 	) error
+	Close() error
 }

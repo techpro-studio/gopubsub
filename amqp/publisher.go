@@ -63,6 +63,10 @@ func (p *Publisher) Publish(
 	}
 }
 
+func (p *Publisher) Close() error {
+	return p.conn.Close()
+}
+
 func (p *Publisher) forceReconnect() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -6,7 +6,6 @@ import (
 	"github.com/go-jose/go-jose/v4/json"
 	"github.com/techpro-studio/gopubsub/abstract"
 	"log"
-	"time"
 )
 
 type DefaultSubscriber struct {
@@ -14,35 +13,37 @@ type DefaultSubscriber struct {
 	projectID         string
 	topic             string
 	client            *pubsub.Client
+	subscriber        *pubsub.Subscriber
 }
 
-func NewDefaultSubscriber(authenticationKey string, projectID string, topic string) *DefaultSubscriber {
-	return &DefaultSubscriber{authenticationKey: authenticationKey, projectID: projectID, topic: topic}
+func NewDefaultSubscriber(ctx context.Context, authenticationKey string, projectID string, subscriptionID string) (*DefaultSubscriber, error) {
+	client, err := ConnectToPubsub(ctx, authenticationKey, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	sub := client.Subscriber(subscriptionID)
+
+	return &DefaultSubscriber{
+		authenticationKey: authenticationKey,
+		projectID:         projectID,
+		topic:             subscriptionID,
+		subscriber:        sub,
+		client:            client,
+	}, nil
+}
+
+func (s *DefaultSubscriber) Close() error {
+	return s.client.Close()
 }
 
 func (s *DefaultSubscriber) Listen(ctx context.Context, handler abstract.SubscriptionHandler) {
-	backoff := time.Second
-
-	for {
-		if s.client == nil {
-			client, err := EnsureConnection(ctx, s.authenticationKey, s.projectID)
-			if err != nil {
-				time.Sleep(backoff)
-				backoff *= 2
-				s.logError(err.Error(), "Client create")
-				continue
-			} else {
-				s.client = client
-				break
-			}
-		}
-	}
-
-	err := s.client.Subscriber(s.topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+	err := s.subscriber.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
 		var data any
 		err := json.Unmarshal(m.Data, &data)
 		if err != nil {
-			m.Nack()
+			log.Printf("Error unmarshalling pubsub message: %v", err)
+			m.Ack()
 			return
 		}
 		err = handler.Handle(ctx, data)

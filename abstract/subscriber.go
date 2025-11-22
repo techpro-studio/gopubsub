@@ -14,4 +14,5 @@ func (f SubscriptionHandlerFunc) Handle(ctx context.Context, body any) error {
 
 type Subscriber interface {
 	Listen(ctx context.Context, handler SubscriptionHandler)
+	Close() error
 }
