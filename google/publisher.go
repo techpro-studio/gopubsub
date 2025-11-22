@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/pubsub/v2"
 	"context"
 	"github.com/go-jose/go-jose/v4/json"
+	"log"
 	"sync"
 	"time"
 )
@@ -80,6 +81,10 @@ func (p *Publisher) publishOnce(ctx context.Context, routingKey string, payload 
 	result := publisher.Publish(ctx, &pubsub.Message{
 		Data: data,
 	})
-	_, err = result.Get(ctx)
+	serverId, err := result.Get(ctx)
+	if err != nil {
+		return err
+	}
+	log.Printf("Published a message with routing key %s to %s", routingKey, serverId)
 	return err
 }
