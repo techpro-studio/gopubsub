@@ -2,7 +2,6 @@ package abstract
 
 import (
 	"context"
-	"time"
 )
 
 type Publisher interface {
@@ -10,8 +9,6 @@ type Publisher interface {
 		ctx context.Context,
 		routingKey string,
 		payload any,
-		retry int,
-		delay time.Duration,
 	) error
 	Close() error
 }
