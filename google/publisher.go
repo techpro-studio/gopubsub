@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/pubsub/v2"
 	"context"
 	"github.com/go-jose/go-jose/v4/json"
+	"github.com/techpro-studio/gopubsub/abstract"
 	"sync"
 )
 
@@ -56,6 +57,33 @@ func (p *Publisher) Publish(ctx context.Context, routingKey string, payload any)
 		Data: data,
 	})
 	return nil
+}
+
+type PubsubResultWrapper struct {
+	result *pubsub.PublishResult
+}
+
+func (p PubsubResultWrapper) Get(ctx context.Context) (any, error) {
+	return p.result.Get(ctx)
+}
+
+func (p *Publisher) PublishAsync(
+	ctx context.Context,
+	routingKey string,
+	payload any,
+) abstract.AsyncPublisherResult {
+	data, err := json.Marshal(&payload)
+	if err != nil {
+		panic(err)
+	}
+
+	publisher := p.getTopic(routingKey)
+
+	result := publisher.Publish(ctx, &pubsub.Message{
+		Data: data,
+	})
+
+	return PubsubResultWrapper{result: result}
 }
 
 func (p *Publisher) getTopic(routingKey string) *pubsub.Publisher {
