@@ -45,36 +45,26 @@ func (p *Publisher) Close() error {
 	return nil
 }
 
-func (p *Publisher) Publish(ctx context.Context, routingKey string, payload any) error {
-	data, err := json.Marshal(&payload)
-	if err != nil {
-		return err
-	}
-
-	publisher := p.getTopic(routingKey)
-
-	_ = publisher.Publish(ctx, &pubsub.Message{
-		Data: data,
-	})
-	return nil
-}
-
 type PubsubResultWrapper struct {
-	result *pubsub.PublishResult
+	result  *pubsub.PublishResult
+	initErr error
 }
 
 func (p PubsubResultWrapper) Get(ctx context.Context) (any, error) {
+	if p.initErr != nil {
+		return nil, p.initErr
+	}
 	return p.result.Get(ctx)
 }
 
-func (p *Publisher) PublishAsync(
+func (p *Publisher) Publish(
 	ctx context.Context,
 	routingKey string,
 	payload any,
-) abstract.AsyncPublisherResult {
+) abstract.PublishResult {
 	data, err := json.Marshal(&payload)
 	if err != nil {
-		panic(err)
+		return PubsubResultWrapper{initErr: err}
 	}
 
 	publisher := p.getTopic(routingKey)
